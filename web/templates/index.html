@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="900">
+  <title>ESP32 Thermometer</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-yellow-light text-brown-middle min-h-screen">
+  <main class="max-w-3xl mx-auto p-4 space-y-6">
+    <div class="flex items-baseline justify-between">
+      <h1 class="text-2xl font-bold text-purple-dark">ESP32 Thermometer</h1>
+      <a href="/settings" class="text-sm underline">Settings</a>
+    </div>
+
+    {% if error %}
+      <p class="rounded bg-beige-light text-brown-dark p-3">{{ error }}</p>
+    {% endif %}
+
+    {% if latest %}
+    <section class="grid grid-cols-2 gap-4">
+      <div class="rounded-xl bg-white p-4 sm:p-6 border border-beige-dark text-center">
+        <div id="temp" class="text-4xl sm:text-5xl font-semibold text-purple-dark">{{ '%g'|format(latest.temperature|round(1)) }}°C</div>
+        <div class="text-brown-middle mt-1">Temperature</div>
+      </div>
+      <div class="rounded-xl bg-white p-4 sm:p-6 border border-beige-dark text-center">
+        <div id="hum" class="text-4xl sm:text-5xl font-semibold text-purple-dark">{{ '%g'|format(latest.humidity|round(1)) }}%</div>
+        <div class="text-brown-middle mt-1">Humidity</div>
+      </div>
+      <p id="updated" class="col-span-2 text-center text-sm text-brown-middle">Last updated {{ latest.time }} (UK time)</p>
+    </section>
+    {% elif not error %}
+      <p class="text-brown-middle">No readings yet.</p>
+    {% endif %}
+
+    <div class="text-center space-y-2">
+      <button id="capture" type="button" class="rounded-lg bg-purple-dark text-yellow-light px-4 py-2 text-sm font-medium hover:bg-brown-dark disabled:opacity-60">Take reading now</button>
+      <p id="capture-status" class="text-sm text-brown-middle" role="status"></p>
+    </div>
+    <script>
+      // Sends a request to Supabase; the board answers on its next check (every {{ check_interval_s }} s or so).
+      const button = document.getElementById("capture");
+      const status = document.getElementById("capture-status");
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        status.textContent = "Sending request...";
+        try {
+          const res = await fetch("/api/capture", { method: "POST" });
+          if (!res.ok) throw new Error();
+          const { request_id } = await res.json();
+          status.textContent = "Waiting for the board. It checks about every {{ (check_interval_s / 60) | round(1) | string | replace('.0', '') }} min, so this can take a moment.";
+          const started = Date.now();
+          const timer = setInterval(async () => {
+            try {
+              const poll = await fetch("/api/capture/" + request_id);
+              const data = await poll.json();
+              if (data.done) {
+                clearInterval(timer);
+                status.textContent = "Got it. Reloading...";
+                location.reload();
+              } else if (Date.now() - started > ({{ check_interval_s }} + 120) * 1000) {
+                clearInterval(timer);
+                status.textContent = "No answer yet. The board may be offline; the request stays queued.";
+                button.disabled = false;
+              }
+            } catch (e) { /* keep trying */ }
+          }, 5000);
+        } catch (e) {
+          status.textContent = "Could not send the request.";
+          button.disabled = false;
+        }
+      });
+    </script>
+
+    {% if history %}
+    <section class="rounded-xl bg-white p-4 border border-beige-dark">
+      <h2 class="font-semibold mb-2 text-purple-dark">Last {{ history_hours }} hours</h2>
+      <div class="relative h-64 sm:h-80"><canvas id="chart"></canvas></div>
+    </section>
+
+    <section class="rounded-xl bg-white p-4 border border-beige-dark">
+      <h2 class="font-semibold mb-2 text-purple-dark">Readings</h2>
+      <div class="max-h-96 overflow-y-auto"><table class="w-full text-sm">
+        <thead class="text-left text-brown-middle sticky top-0 bg-white">
+          <tr><th class="py-1">Time</th><th>Temp</th><th>Humidity</th></tr>
+        </thead>
+        <tbody>
+          {% for r in history | reverse %}
+          <tr class="border-t border-beige-light">
+            <td class="py-1">{{ r.time }}</td>
+            <td>{{ '%g'|format(r.temperature|round(1)) }}°C</td>
+            <td>{{ '%g'|format(r.humidity|round(1)) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+      const history = {{ history | tojson }};
+      Chart.defaults.color = "#5A5458";
+      Chart.defaults.borderColor = "#D8D2CE";
+      new Chart(document.getElementById("chart"), {
+        type: "line",
+        data: {
+          labels: history.map(r => r.time),
+          datasets: [
+            { label: "Temperature (°C)", data: history.map(r => r.temperature), borderColor: "#673E2A", yAxisID: "t", tension: 0.3 },
+            { label: "Humidity (%)", data: history.map(r => r.humidity), borderColor: "#967B8E", yAxisID: "h", tension: 0.3 },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            t: { position: "left", title: { display: true, text: "°C" } },
+            h: { position: "right", title: { display: true, text: "%" }, grid: { drawOnChartArea: false } },
+          },
+        },
+      });
+    </script>
+    {% endif %}
+  </main>
+</body>
+</html>

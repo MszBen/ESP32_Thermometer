@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- ESP32 Thermometer ---
+# Real credentials (keep secrets.example.py committed)
+firmware/secrets.py
+# MicroPython firmware images
+*.bin
+# Web app (keep web/.env.example committed)
+web/.env
+
+# Tailwind standalone CLI binary
+web/tailwindcss*.exe

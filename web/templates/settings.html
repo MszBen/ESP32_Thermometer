@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings - ESP32 Thermometer</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-yellow-light text-brown-middle min-h-screen">
+  <main class="max-w-xl mx-auto p-4 space-y-6">
+    <div class="flex items-baseline justify-between">
+      <h1 class="text-2xl font-bold text-purple-dark">Settings</h1>
+      <a href="/" class="text-sm underline">Back to readings</a>
+    </div>
+
+    {% if message %}<p class="rounded bg-beige-light text-brown-dark p-3">{{ message }}</p>{% endif %}
+    {% if error %}<p class="rounded bg-beige-light text-brown-dark p-3 font-medium">{{ error }}</p>{% endif %}
+
+    <form method="post" class="rounded-xl bg-white p-4 sm:p-6 border border-beige-dark space-y-4">
+      {% for name, (label, help, kind, low, high) in fields.items() %}
+      <div>
+        <label for="{{ name }}" class="block font-medium text-purple-dark">{{ label }}</label>
+        <input id="{{ name }}" name="{{ name }}" type="number" required
+               min="{{ low }}" max="{{ high }}" step="{{ 'any' if kind.__name__ == 'float' else 1 }}"
+               value="{{ settings[name] }}"
+               class="mt-1 w-full rounded-lg border border-beige-dark bg-yellow-light px-3 py-2">
+        <p class="text-sm mt-1">{{ help }}</p>
+      </div>
+      {% endfor %}
+      <div class="border-t border-beige-light pt-4">
+        <label for="password" class="block font-medium text-purple-dark">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password"
+               class="mt-1 w-full rounded-lg border border-beige-dark bg-yellow-light px-3 py-2">
+      </div>
+      <button type="submit" class="rounded-lg bg-purple-dark text-yellow-light px-4 py-2 text-sm font-medium hover:bg-brown-dark">Save settings</button>
+    </form>
+  </main>
+</body>
+</html>
