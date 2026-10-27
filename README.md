@@ -23,7 +23,7 @@ DHT11 `+` to 3V3, `-` to GND, `out` to GPIO4.
 
 ## Database
 
-In the Supabase SQL editor, run `supabase/schema.sql`, then `supabase/migration_capture_settings.sql`.
+In the Supabase SQL editor, run `supabase/schema.sql`, then `supabase/migration_capture_settings.sql`, then `supabase/migration_device_errors.sql`.
 
 ## Firmware setup
 

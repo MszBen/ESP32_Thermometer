@@ -15,7 +15,22 @@
     </div>
 
     {% if error %}
-      <p class="rounded bg-beige-light text-brown-dark p-3">{{ error }}</p>
+      <p class="rounded bg-beige-light text-brown-dark p-3" role="alert">{{ error }}</p>
+    {% endif %}
+
+    {% if offline %}
+      <p class="rounded bg-beige-light text-brown-dark p-3 border border-brown-light" role="alert">{{ offline }}</p>
+    {% endif %}
+
+    {% if board_errors %}
+    <section class="rounded-xl bg-beige-light p-4 border border-brown-light" role="alert">
+      <h2 class="font-semibold text-brown-dark mb-1">Board errors (last 24 hours)</h2>
+      <ul class="text-sm text-brown-dark space-y-1">
+        {% for e in board_errors %}
+        <li><span class="font-medium">{{ e.time }}</span> &ndash; {{ e.message }}</li>
+        {% endfor %}
+      </ul>
+    </section>
     {% endif %}
 
     {% if latest %}

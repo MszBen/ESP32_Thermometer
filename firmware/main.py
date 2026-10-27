@@ -81,26 +81,49 @@ def post_reading(t, h, request_id):
     r.close()
     return ok
 
-# Seconds since the last scheduled reading. Kept in RTC memory so it survives deep sleep.
-def load_elapsed():
+def post_error(message):
+    """Tell the website something went wrong. Returns True if it was saved."""
+    try:
+        r = requests.post(
+            SUPABASE_URL + "/rest/v1/device_errors",
+            json={"message": message[:200]},
+            headers={"apikey": SUPABASE_KEY, "Prefer": "return=minimal"},
+        )
+        ok = r.status_code == 201
+        r.close()
+        return ok
+    except Exception as e:
+        print("could not report error:", e)
+        return False
+
+# State kept in RTC memory so it survives deep sleep, stored as "seconds|error":
+#   seconds = time since the last scheduled reading (empty on first boot = take one straight away)
+#   error   = a problem that couldn't be reported yet (e.g. Wi-Fi was down), sent on the next wake
+def load_state():
     try:
         if machine.reset_cause() == machine.DEEPSLEEP_RESET:
-            return int(rtc.memory())
+            seconds, _, error = rtc.memory().decode().partition("|")
+            return (int(seconds) if seconds else None), error
     except Exception:
         pass
-    return None   # first boot: take a reading straight away
+    return None, ""
 
-def save_elapsed(seconds):
+def save_state(elapsed, error):
     try:
-        rtc.memory(str(int(seconds)))
+        rtc.memory(((str(int(elapsed)) if elapsed is not None else "") + "|" + error[:200]).encode())
     except Exception:
         pass
 
-def check_once(elapsed):
-    """One wake-up: fetch settings, take a reading if due or requested. Returns (elapsed, sleep_s)."""
+def check_once(elapsed, queued_error):
+    """One wake-up. Returns (elapsed, queued_error, sleep_s)."""
     if not connect_wifi(DEFAULTS["wifi_timeout_s"]):
         print("wifi failed")
-        return elapsed, DEFAULTS["check_interval_s"]
+        # Can't reach the server, so remember it and report on the next wake.
+        error = queued_error or "Wi-Fi connection failed"
+        wait = DEFAULTS["check_interval_s"]
+        return (None if elapsed is None else elapsed + wait), error, wait
+
+    errors = [queued_error] if queued_error else []
     settings = get_settings()
     sleep_s = max(30, int(settings["check_interval_s"]))   # never hammer the server
     request_id = get_pending_request()
@@ -109,27 +132,38 @@ def check_once(elapsed):
         reading = read_sensor(int(settings["sensor_retries"]))
         if not reading:
             print("sensor read failed")
+            errors.append("Sensor read failed (check the DHT11 wiring)")
         else:
             t = round(reading[0] + settings["temp_offset"], 1)
             h = round(reading[1] + settings["humidity_offset"], 1)
             print("Temp:", t, "Humidity:", h, "request:", request_id)
             try:
-                if post_reading(t, h, request_id) and due:
-                    elapsed = 0
+                if post_reading(t, h, request_id):
+                    if due:
+                        elapsed = 0
+                else:
+                    errors.append("Upload to Supabase was rejected")
             except Exception as e:
                 print("upload failed:", e)
+                errors.append("Upload to Supabase failed: " + str(e))
     else:
         print("nothing to do")
     if due and elapsed != 0:
         elapsed = settings["reading_interval_min"] * 60   # reading failed: stay due, retry next wake
-    return elapsed + sleep_s, sleep_s
 
-elapsed = load_elapsed()
+    # Report problems. Anything that can't be sent now is kept for the next wake.
+    queued_error = ""
+    for message in errors:
+        if not post_error(message):
+            queued_error = message
+    return elapsed + sleep_s, queued_error, sleep_s
+
+elapsed, queued_error = load_state()
 if DEV:
     while True:
-        elapsed, sleep_s = check_once(elapsed)
+        elapsed, queued_error, sleep_s = check_once(elapsed, queued_error)
         time.sleep(sleep_s)
 else:
-    elapsed, sleep_s = check_once(elapsed)
-    save_elapsed(elapsed)
+    elapsed, queued_error, sleep_s = check_once(elapsed, queued_error)
+    save_state(elapsed, queued_error)
     machine.deepsleep(sleep_s * 1000)

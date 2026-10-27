@@ -21,6 +21,7 @@ and keep things simple.
 | `firmware/tools/` | Small hardware diagnostic scripts (DHT probe, pin-level checks) |
 | `supabase/schema.sql` | `readings` table plus row level security policies |
 | `supabase/migration_capture_settings.sql` | Run after `schema.sql`: `settings`, `capture_requests`, `pending_requests` view, `readings.request_id` |
+| `supabase/migration_device_errors.sql` | `device_errors` table: problems the board reports, shown on the website |
 | `web/` | The website (FastAPI + Jinja2 + Tailwind). `main.py` is the Vercel entrypoint |
 
 ## Hardware
@@ -70,7 +71,7 @@ Things that have already caused problems:
 
 ## Database (Supabase)
 
-Run `supabase/schema.sql`, then `supabase/migration_capture_settings.sql`, in the Supabase SQL editor.
+Run `supabase/schema.sql`, then `supabase/migration_capture_settings.sql`, then `supabase/migration_device_errors.sql`, in the Supabase SQL editor.
 
 - `readings`: `id`, `created_at` (server default `now()`), `device_id` (default `esp32-c3-1`),
   `temperature` (real), `humidity` (real), `request_id` (set when the reading answers a button press).
@@ -80,6 +81,10 @@ Run `supabase/schema.sql`, then `supabase/migration_capture_settings.sql`, in th
   Offsets are applied by the board before posting, so old readings are not changed.
 - `capture_requests`: one row per button press. The view `pending_requests` lists requests newer than the
   highest `request_id` in `readings`, so one reading answers every earlier press.
+- `device_errors`: `message` (max 200 chars) plus `device_id`, `created_at`. The board inserts a row when the sensor
+  read fails, an upload fails, or Wi-Fi was down (that one is kept in RTC memory and sent on the next wake). The
+  website shows the last 5 from the past 24 h, and an "offline" warning when the newest reading is older than
+  2x `reading_interval_min` + 5 min.
 - Row level security is on. `anon` (the board, and the website's reads) can select from everything and insert
   readings. Only the website, using the server-side service key, can write `settings` and `capture_requests`.
 

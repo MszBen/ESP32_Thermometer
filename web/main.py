@@ -99,6 +99,31 @@ async def index(request: Request):
         {"time": to_london(r["created_at"]).strftime("%H:%M"), "temperature": r["temperature"], "humidity": r["humidity"]}
         for r in history_rows
     ]
+
+    # Problems the board reported in the last 24 h (empty if the table isn't set up yet).
+    try:
+        error_rows = await supabase(
+            "GET", "device_errors",
+            params={
+                "select": "created_at,message",
+                "created_at": f"gte.{(datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}",
+                "order": "created_at.desc",
+                "limit": 5,
+            },
+        )
+    except (httpx.HTTPError, KeyError):
+        error_rows = []
+    board_errors = [
+        {"time": to_london(r["created_at"]).strftime("%d %b, %H:%M"), "message": r["message"]} for r in error_rows
+    ]
+
+    # No reading for a long time usually means the board is off, out of Wi-Fi range or stuck.
+    offline = None
+    if latest_rows:
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(latest_rows[0]["created_at"])
+        if age > timedelta(minutes=settings["reading_interval_min"] * 2 + 5):
+            hours, minutes = divmod(int(age.total_seconds() // 60), 60)
+            offline = f"No reading for {hours} h {minutes} min, so the board may be offline."
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -106,6 +131,8 @@ async def index(request: Request):
             "latest": format_latest(latest_rows[0]) if latest_rows else None,
             "history": history,
             "error": error,
+            "offline": offline,
+            "board_errors": board_errors,
             "history_hours": settings["history_hours"],
             "check_interval_s": settings["check_interval_s"],
         },
