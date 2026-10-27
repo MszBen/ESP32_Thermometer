@@ -48,14 +48,16 @@ Things that have already caused problems:
 
 - **`secrets.py` must be copied to the board.** `mpremote run` only sends the script being run, so
   `from secrets import *` fails with "no module named secrets" until the file is on the board's own storage.
-- **`main.py` has `DEV = True` for testing** (loops, no deep sleep). Set `DEV = False`
-  for the real deep-sleep mode. While the board deep sleeps, the USB serial port disappears;
+- **`main.py` has `DEV = False`** (real deep-sleep mode), and that version is on the board. Set `DEV = True`
+  for testing (loops with prints, no deep sleep). While the board deep sleeps, the USB serial port disappears;
   hold BOOT and tap RESET to reprogram it.
+- **No venv in this repo's `firmware/`.** `mpremote` and `esptool` live in the old folder's venv:
+  `C:\Users\Ben\Documents\Python Projects\ESP32 Thermometer\venv\Scripts\`.
 - **Board behaviour:** each wake it connects to Wi-Fi, reads `settings` and `pending_requests` from Supabase,
   takes a reading if a button press is pending or a scheduled reading is due, adds the temperature/humidity
   offsets, posts it (with `request_id` if it answers a button press), then sleeps `check_interval_s`
   (default 180 s, minimum 30). Time since the last scheduled reading is kept in RTC memory across deep sleep.
-  Deep-sleep mode has not been tested on the board yet; DEV mode has.
+  Deep-sleep mode was started on the board (first reading posted), but a full wake cycle has not been observed yet.
 - **`mpremote run` holds COM3** until it exits. Stop it before running another mpremote command.
 - **Wiring faults look like code faults.** Loose breadboard legs gave `OSError: [Errno 116] ETIMEDOUT`.
   Diagnose with `firmware/tools/pin_pulldown.py`: it should print `1` (the module's pull-up is
@@ -114,5 +116,5 @@ instance and `requirements.txt` there, with the project's **Root Directory set t
 
 ## Stale items to tidy
 
-- `firmware/main.py` is still in `DEV = True` mode.
-- Test rows with `device_id = 'test-row'` are in the `readings` table; delete them in the Supabase Table Editor.
+- Confirm the board wakes from deep sleep and keeps posting (a button press answered, a scheduled reading every 30 min).
+- The board is USB-powered only; no battery holder yet (the 7-pin DS1307 module is a clock, not a power source).

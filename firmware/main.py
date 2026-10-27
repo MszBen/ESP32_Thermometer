@@ -5,7 +5,7 @@ except ImportError:
     import urequests as requests
 from secrets import *
 
-DEV = True   # True: loop with prints (for testing). False: deep sleep between checks.
+DEV = False  # True: loop with prints (for testing). False: deep sleep between checks.
 
 # Used if the settings can't be fetched. The real values are edited on the website.
 DEFAULTS = {
